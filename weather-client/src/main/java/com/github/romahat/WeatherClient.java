@@ -13,9 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class WeatherClient {
     private final static Logger LOGGER = LoggerFactory.getLogger(WeatherClient.class);
@@ -23,6 +22,7 @@ public class WeatherClient {
     private final WeatherGrpc.WeatherBlockingStub blockingStub;
     private final WeatherGrpc.WeatherStub asyncStub;
     private final WeatherGrpc.WeatherFutureStub futureStub;
+    private final AtomicLong successCounter = new AtomicLong();
 
     public WeatherClient() {
         channel = ManagedChannelBuilder
@@ -36,27 +36,38 @@ public class WeatherClient {
 
     public static void main(String[] args) throws InterruptedException {
         LOGGER.info("Running weather requests...");
-        ExecutorService callBacksExecutor = Executors.newFixedThreadPool(50, new ThreadFactoryBuilder()
-                .setNameFormat("callback-queries-%d")
-                .build());
+        LinkedBlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>();
+        ThreadPoolExecutor callBacksExecutor = new ThreadPoolExecutor(10, 10,
+                0L, TimeUnit.MILLISECONDS,
+                workQueue,
+                new ThreadFactoryBuilder()
+                        .setNameFormat("grpc-requests-%d")
+                        .build());
         WeatherClient weatherClient = new WeatherClient();
-        submitFuturesCalls(callBacksExecutor, weatherClient);
-        //shutdown(callBacksExecutor);
-        //weatherClient.shutdown();
+        weatherClient.submitFuturesCalls(callBacksExecutor);
+        while(!callBacksExecutor.isTerminated()) {
+            LOGGER.info("#### Thread Report:: Active:" + callBacksExecutor.getActiveCount() + " Pool: "
+                    + callBacksExecutor.getPoolSize() + " MaxPool: " + callBacksExecutor.getMaximumPoolSize()
+                    + " ####\n" + "Queue size: " + workQueue.size() + ", success: " + weatherClient.successCounter.get());
+            TimeUnit.SECONDS.sleep(5);
+        }
     }
 
-    private static void submitFuturesCalls(ExecutorService executorService, WeatherClient weatherClient) {
+    private void submitFuturesCalls(ExecutorService executorService) {
         Random random = new Random();
         for (int i=0; i< 1_000_000; i++) {
+            if (i % 10000 == 0) {
+                LOGGER.info("Submitting {} requests", i);
+            }
             WeatherRequest request = WeatherRequest.newBuilder()
                     .setCity(City.forNumber(random.nextInt(16)))
                     .build();
-            ListenableFuture<WeatherReply> weather = weatherClient.futureStub.getWeather(request);
+            ListenableFuture<WeatherReply> weather = this.futureStub.getWeather(request);
             Futures.addCallback(weather,
                     new FutureCallback<>() {
                         @Override
                         public void onSuccess(@NullableDecl WeatherReply result) {
-                            LOGGER.info("From future: " + result.getTemperature());
+                            successCounter.incrementAndGet();
                         }
 
                         @Override
@@ -66,6 +77,7 @@ public class WeatherClient {
                     },
                     executorService);
         }
+        LOGGER.info("Finished queries submitting");
     }
 
     private static void submitBlockingCallsInExecutor(WeatherClient weatherClient) {
