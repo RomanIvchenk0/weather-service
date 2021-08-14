@@ -52,6 +52,7 @@ public class WeatherServer implements Managed {
     @Override
     public void stop() {
         server.shutdown();
+        threadPoolExecutor.shutdown();
         LOGGER.info("Shutting down service...");
     }
 
