@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.github.romahat.grpc";
+option java_outer_classname = "WeatherProto";
+
+service Weather {
+  rpc getWeather (WeatherRequest) returns (WeatherReply) {}
+}
+
+message WeatherRequest {
+  City city = 1;
+}
+
+message WeatherReply {
+  string temperature = 1;
+}
+
+enum City {
+  ODESSA = 0;
+  KIEV = 1;
+  LVIV = 2;
+  DNEPR = 3;
+  KHARKIV = 4;
+  KHERSON = 5;
+  MYKOLAYV = 6;
+  UZHGOROD = 7;
+  LUTSK = 8;
+  POLTAVA = 9;
+  ZHITOMYR = 10;
+  TERNOPOL = 11;
+  KHMELMITSKY = 12;
+  CHERNIVTSI = 13;
+  CHERNIGIV = 14;
+  ZAPORIZHZHIA = 15;
+}

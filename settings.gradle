@@ -1,0 +1,5 @@
+rootProject.name = 'weather-service'
+include 'weather-server'
+include 'weather-client'
+include 'weather-api'
+
