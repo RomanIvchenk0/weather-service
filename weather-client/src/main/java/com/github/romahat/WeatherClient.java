@@ -26,7 +26,7 @@ public class WeatherClient {
 
     public WeatherClient() {
         channel = ManagedChannelBuilder
-                .forAddress("127.0.0.1", 50051)
+                .forAddress("192.168.0.105", 50051)
                 .usePlaintext()
                 .build();
         blockingStub = WeatherGrpc.newBlockingStub(channel);
@@ -36,16 +36,12 @@ public class WeatherClient {
 
     public static void main(String[] args) throws InterruptedException {
         LOGGER.info("Running weather requests...");
-        ExecutorService executorService = Executors.newFixedThreadPool(50, new ThreadFactoryBuilder()
-                .setNameFormat("running-queries-%d")
-                .build());
         ExecutorService callBacksExecutor = Executors.newFixedThreadPool(50, new ThreadFactoryBuilder()
                 .setNameFormat("callback-queries-%d")
                 .build());
         WeatherClient weatherClient = new WeatherClient();
-        submitBlockingCallsInExecutor(weatherClient, executorService);
         submitFuturesCalls(callBacksExecutor, weatherClient);
-        shutdown(executorService, callBacksExecutor);
+        //shutdown(callBacksExecutor);
         //weatherClient.shutdown();
     }
 
@@ -72,29 +68,27 @@ public class WeatherClient {
         }
     }
 
-    private static void submitBlockingCallsInExecutor(WeatherClient weatherClient, ExecutorService executorService) {
+    private static void submitBlockingCallsInExecutor(WeatherClient weatherClient) {
         Random random = new Random();
         for (int i=1; i<1_000_000; i++) {
-            executorService.submit(() -> {
-                try {
-                    WeatherRequest request = WeatherRequest.newBuilder()
-                            .setCity(City.forNumber(random.nextInt(16)))
-                            .build();
-                    WeatherReply weather = weatherClient.blockingStub
-                            .withDeadline(Deadline.after(10, TimeUnit.SECONDS))
-                            .getWeather(request);
-                    LOGGER.info("Weather in Odessa: " + weather.getTemperature());
-                } catch (Exception e) {
-                    LOGGER.error("Error in blocking call", e);
-                }
-            });
+            try {
+                City city = City.forNumber(random.nextInt(16));
+                WeatherRequest request = WeatherRequest.newBuilder()
+                        .setCity(city)
+                        .build();
+                WeatherReply weather = weatherClient.blockingStub
+                        .withDeadline(Deadline.after(10, TimeUnit.SECONDS))
+                        .getWeather(request);
+                LOGGER.info("Weather in {}: {}", city, weather.getTemperature());
+            } catch (Exception e) {
+                LOGGER.error("Error in blocking call", e);
+            }
         }
     }
 
-    private static void shutdown(ExecutorService executorService, ExecutorService callbacks) throws InterruptedException {
+    private static void shutdown(ExecutorService executorService) throws InterruptedException {
         executorService.shutdown();
-        callbacks.shutdown();
-        while (!executorService.isTerminated() && !callbacks.isTerminated()) {
+        while (!executorService.isTerminated()) {
             if (System.currentTimeMillis() % 10 ==0) {
                 LOGGER.info("Terminating");
                 TimeUnit.SECONDS.sleep(1000);
