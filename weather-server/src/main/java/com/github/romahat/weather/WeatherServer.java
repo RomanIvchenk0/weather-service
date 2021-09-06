@@ -18,22 +18,20 @@ public class WeatherServer implements Managed {
     private final int port;
     private final Server server;
     private final ThreadPoolExecutor threadPoolExecutor;
-    private final LinkedBlockingQueue<Runnable> queue;
 
     public WeatherServer(int port) {
         this.port = port;
-        this.queue = new LinkedBlockingQueue<>();
-        this.threadPoolExecutor = getThreadPoolExecutor(queue);
+        this.threadPoolExecutor = getThreadPoolExecutor();
         this.server = ServerBuilder.forPort(port)
                 .executor(threadPoolExecutor)
                 .addService(new WeatherImpl())
                 .build();
     }
 
-    private ThreadPoolExecutor getThreadPoolExecutor(LinkedBlockingQueue<Runnable> queue) {
+    private ThreadPoolExecutor getThreadPoolExecutor() {
         ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(10, 10,
                 0L, TimeUnit.MILLISECONDS,
-                queue,
+                new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder()
                         .setNameFormat("grpc-incoming-%d")
                         .build());
@@ -59,6 +57,6 @@ public class WeatherServer implements Managed {
     private void monitor() {
         System.out.println("#### Thread Report:: Active:" + threadPoolExecutor.getActiveCount() + " Pool: "
                 + threadPoolExecutor.getPoolSize() + " MaxPool: " + threadPoolExecutor.getMaximumPoolSize()
-                + " ####" + "Queue size: " + queue.size());
+                + " ####" + "Queue size: " + threadPoolExecutor.getQueue().size());
     }
 }

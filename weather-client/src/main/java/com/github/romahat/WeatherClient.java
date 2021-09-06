@@ -8,6 +8,8 @@ import com.google.common.util.concurrent.*;
 import io.grpc.Deadline;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
+import io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,10 +38,9 @@ public class WeatherClient {
 
     public static void main(String[] args) throws InterruptedException {
         LOGGER.info("Running weather requests...");
-        LinkedBlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>();
         ThreadPoolExecutor callBacksExecutor = new ThreadPoolExecutor(10, 10,
                 0L, TimeUnit.MILLISECONDS,
-                workQueue,
+                new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder()
                         .setNameFormat("grpc-requests-%d")
                         .build());
@@ -48,21 +49,23 @@ public class WeatherClient {
         while(!callBacksExecutor.isTerminated()) {
             LOGGER.info("#### Thread Report:: Active:" + callBacksExecutor.getActiveCount() + " Pool: "
                     + callBacksExecutor.getPoolSize() + " MaxPool: " + callBacksExecutor.getMaximumPoolSize()
-                    + " ####\n" + "Queue size: " + workQueue.size() + ", success: " + weatherClient.successCounter.get());
+                    + " ####\n" + "Queue size: " + callBacksExecutor.getQueue().size() + ", success: " + weatherClient.successCounter.get());
+            EventLoopGroup.iterator();
             TimeUnit.SECONDS.sleep(5);
         }
     }
 
     private void submitFuturesCalls(ExecutorService executorService) {
         Random random = new Random();
-        for (int i=0; i< 1_000_000; i++) {
+        for (int i=0; i< 3_00_000; i++) {
             if (i % 10000 == 0) {
                 LOGGER.info("Submitting {} requests", i);
             }
             WeatherRequest request = WeatherRequest.newBuilder()
                     .setCity(City.forNumber(random.nextInt(16)))
                     .build();
-            ListenableFuture<WeatherReply> weather = this.futureStub.getWeather(request);
+            ListenableFuture<WeatherReply> weather = this.futureStub
+                    .withDeadline(Deadline.after(10,TimeUnit.SECONDS)).getWeather(request);
             Futures.addCallback(weather,
                     new FutureCallback<>() {
                         @Override
